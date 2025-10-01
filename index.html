@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DJ Memory Challenge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        :root {
+            --primary-color: #4cc9f0;
+            --secondary-color: #f72585;
+            --bg-dark: #1a1a2e;
+            --bg-darker: #16213e;
+            --console-bg: #212121;
+            --text-light: #ffffff;
+            --text-dim: #a0a0a0;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark), var(--bg-darker));
+            color: var(--text-light);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2vh 2vw;
+            overflow-x: hidden;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2vh;
+            width: 100%;
+            padding: 0 1rem;
+        }
+
+        h1 {
+            font-size: clamp(1.8rem, 5vw, 2.5rem);
+            margin-bottom: 1vh;
+            color: var(--primary-color);
+            text-shadow: 0 0 10px rgba(76, 201, 240, 0.5);
+        }
+
+        header p {
+            font-size: clamp(0.9rem, 3vw, 1.1rem);
+            color: var(--text-dim);
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            width: min(90vw, 800px);
+            margin-bottom: 2vh;
+            background: rgba(255, 255, 255, 0.1);
+            padding: clamp(10px, 2vw, 15px);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .info-item {
+            text-align: center;
+            flex: 1;
+        }
+
+        .info-label {
+            font-size: clamp(0.7rem, 2vw, 0.9rem);
+            color: var(--text-dim);
+            margin-bottom: 0.5vh;
+        }
+
+        .info-value {
+            font-size: clamp(1.2rem, 4vw, 1.5rem);
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .dj-console {
+            width: min(95vw, 800px);
+            background: var(--console-bg);
+            border-radius: 15px;
+            padding: clamp(15px, 3vw, 20px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .console-top {
+            display: flex;
+            margin-bottom: 2vh;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            gap: 2vw;
+        }
+
+        .scratch-area {
+            position: relative;
+            width: min(40vw, 250px);
+            height: min(40vw, 250px);
+            flex-shrink: 0;
+        }
+
+        .scratch-disk {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: #0c0c0c;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .disk-image {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="250" height="250" viewBox="0 0 250 250"><circle cx="125" cy="125" r="125" fill="%230c0c0c"/><circle cx="125" cy="125" r="100" fill="%23111111" stroke="%23333" stroke-width="2"/><circle cx="125" cy="125" r="5" fill="%234cc9f0"/><circle cx="125" cy="125" r="2" fill="%23fff"/></svg>') center/cover no-repeat;
+            transition: transform 0.2s ease;
+        }
+
+        .scratch-indicator {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 8px;
+            height: 20px;
+            background: var(--primary-color);
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(76, 201, 240, 0.8);
+            z-index: 10;
+        }
+
+        .target-marker {
+            position: absolute;
+            top: 10px;
+            width: 4px;
+            height: 25px;
+            background: var(--secondary-color);
+            box-shadow: 0 0 10px rgba(247, 37, 133, 0.8);
+            z-index: 5;
+            display: none;
+        }
+
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: clamp(8px, 2vw, 15px);
+            flex: 1;
+            min-height: min(40vw, 200px);
+        }
+
+        .dj-button {
+            background: #333;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(1.2rem, 4vw, 1.5rem);
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            user-select: none;
+            min-height: 60px;
+        }
+
+        .dj-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .dj-button.active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .button-1 { background: linear-gradient(145deg, #f72585, #b5179e); }
+        .button-2 { background: linear-gradient(145deg, #7209b7, #560bad); }
+        .button-3 { background: linear-gradient(145deg, #480ca8, #3a0ca3); }
+        .button-4 { background: linear-gradient(145deg, #3a0ca3, #3f37c9); }
+        .button-5 { background: linear-gradient(145deg, #4361ee, #4895ef); }
+        .button-6 { background: linear-gradient(145deg, #4895ef, #4cc9f0); }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: clamp(15px, 4vw, 20px);
+            margin-top: 2vh;
+        }
+
+        button {
+            padding: clamp(10px, 2.5vw, 12px) clamp(20px, 5vw, 25px);
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(145deg, var(--primary-color), #4361ee);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            font-size: clamp(0.9rem, 3vw, 1rem);
+        }
+
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        #start-btn {
+            background: linear-gradient(145deg, var(--primary-color), #4361ee);
+        }
+
+        #reset-btn {
+            background: linear-gradient(145deg, var(--secondary-color), #b5179e);
+        }
+
+        .message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: clamp(20px, 5vw, 30px) clamp(30px, 7vw, 50px);
+            border-radius: 15px;
+            text-align: center;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            display: none;
+            width: min(90vw, 500px);
+        }
+
+        .message h2 {
+            margin-bottom: 2vh;
+            color: var(--primary-color);
+            font-size: clamp(1.5rem, 4vw, 1.8rem);
+        }
+
+        .message p {
+            margin-bottom: 3vh;
+            font-size: clamp(1rem, 3vw, 1.2rem);
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading p {
+            margin-top: 2vh;
+            font-size: clamp(1rem, 3vw, 1.2rem);
+        }
+
+        .spinner {
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 5px solid var(--primary-color);
+            width: clamp(40px, 10vw, 50px);
+            height: clamp(40px, 10vw, 50px);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Media Queries para diferentes tamaños de pantalla */
+        @media (max-width: 768px) {
+            .console-top {
+                flex-direction: column;
+            }
+            
+            .scratch-area {
+                width: min(60vw, 250px);
+                height: min(60vw, 250px);
+                margin-bottom: 2vh;
+            }
+            
+            .buttons-grid {
+                min-height: min(50vw, 250px);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .game-info {
+                flex-direction: column;
+                gap: 1vh;
+            }
+            
+            .info-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .dj-button {
+                min-height: 50px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            button {
+                width: 80%;
+            }
+        }
+
+        @media (max-height: 600px) and (orientation: landscape) {
+            body {
+                padding: 1vh 2vw;
+            }
+            
+            header {
+                margin-bottom: 1vh;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .game-info {
+                margin-bottom: 1vh;
+                padding: 8px;
+            }
+            
+            .console-top {
+                margin-bottom: 1vh;
+            }
+            
+            .scratch-area {
+                width: min(30vh, 200px);
+                height: min(30vh, 200px);
+            }
+            
+            .buttons-grid {
+                min-height: min(30vh, 150px);
+            }
+            
+            .dj-button {
+                min-height: 40px;
+                font-size: 1rem;
+            }
+        }
+
+        /* Mejoras para pantallas táctiles */
+        @media (hover: none) and (pointer: coarse) {
+            .dj-button:hover {
+                transform: none;
+            }
+            
+            button:hover {
+                transform: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Cargando sonidos...</p>
+    </div>
+
+    <header>
+        <h1>DJ MEMORY</h1>
+        <p>Repite las secuencias de la consola DJ para avanzar de nivel</p>
+    </header>
+
+    <div class="game-info">
+        <div class="info-item">
+            <div class="info-label">NIVEL</div>
+            <div class="info-value" id="level">1</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">MOVIMIENTOS</div>
+            <div class="info-value" id="moves">0</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">PUNTUACIÓN</div>
+            <div class="info-value" id="score">0</div>
+        </div>
+    </div>
+
+    <div class="dj-console">
+        <div class="console-top">
+            <div class="scratch-area">
+                <div class="scratch-indicator"></div>
+                <div class="scratch-disk" id="scratch-disk">
+                    <div class="disk-image"></div>
+                </div>
+                <div class="target-marker" id="target-marker"></div>
+            </div>
+            <div class="buttons-grid">
+                <div class="dj-button button-1" data-button="1">1</div>
+                <div class="dj-button button-2" data-button="2">2</div>
+                <div class="dj-button button-3" data-button="3">3</div>
+                <div class="dj-button button-4" data-button="4">4</div>
+                <div class="dj-button button-5" data-button="5">5</div>
+                <div class="dj-button button-6" data-button="6">6</div>
+            </div>
+        </div>
+        <div class="controls">
+            <button id="start-btn">Iniciar</button>
+            <button id="reset-btn">Reiniciar</button>
+        </div>
+    </div>
+
+    <div class="message" id="message">
+        <h2 id="message-title">Nivel Completado</h2>
+        <p id="message-text">¡Secuencia completada correctamente!</p>
+        <button id="message-button">Continuar</button>
+    </div>
+
+    <script>
+        // El JavaScript permanece igual que en la versión anterior
+        // Solo se han realizado cambios en el CSS para mejorar la responsividad
+        
+        // Variables del juego
+        let currentLevel = 1;
+        let sequence = [];
+        let playerSequence = [];
+        let isPlaying = false;
+        let isShowingSequence = false;
+        let score = 0;
+        let soundsLoaded = false;
+        
+        // Elementos del DOM
+        const levelElement = document.getElementById('level');
+        const movesElement = document.getElementById('moves');
+        const scoreElement = document.getElementById('score');
+        const startButton = document.getElementById('start-btn');
+        const resetButton = document.getElementById('reset-btn');
+        const scratchDisk = document.getElementById('scratch-disk');
+        const targetMarker = document.getElementById('target-marker');
+        const messageElement = document.getElementById('message');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+        const messageButton = document.getElementById('message-button');
+        const loadingElement = document.getElementById('loading');
+        
+        // Botones DJ
+        const djButtons = document.querySelectorAll('.dj-button');
+        
+        // Objeto para almacenar los sonidos
+        const audioFiles = {
+            pista: null,
+            scratch: null,
+            efecto1: null,
+            efecto2: null,
+            efecto3: null,
+            efecto4: null,
+            efecto5: null,
+            efecto6: null
+        };
+        
+        // Inicializar el juego
+        function initGame() {
+            // Cargar sonidos
+            loadSounds().then(() => {
+                soundsLoaded = true;
+                loadingElement.style.display = 'none';
+                console.log('Todos los sonidos cargados correctamente');
+                
+                // Iniciar música de fondo
+                if (audioFiles.pista) {
+                    audioFiles.pista.volume = 0.2;
+                    audioFiles.pista.loop = true;
+                }
+            }).catch(error => {
+                console.error('Error cargando sonidos:', error);
+                loadingElement.innerHTML = '<p>Error cargando sonidos. Recarga la página.</p>';
+            });
+            
+            // Event listeners
+            startButton.addEventListener('click', startGame);
+            resetButton.addEventListener('click', resetGame);
+            messageButton.addEventListener('click', hideMessage);
+            
+            // Event listeners para los botones DJ
+            djButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    if (!isPlaying || isShowingSequence || !soundsLoaded) return;
+                    
+                    const buttonNumber = button.getAttribute('data-button');
+                    playerSequence.push({type: 'button', value: parseInt(buttonNumber)});
+                    updateMoves();
+                    playButtonSound(buttonNumber);
+                    highlightButton(button);
+                    
+                    checkSequence();
+                });
+            });
+            
+            // Event listeners para el disco de scratch
+            let isDragging = false;
+            let startX = 0;
+            let currentX = 0;
+            let scratchSoundPlaying = false;
+            
+            scratchDisk.addEventListener('mousedown', startDrag);
+            scratchDisk.addEventListener('touchstart', startDrag);
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag);
+            
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchend', endDrag);
+            
+            function startDrag(e) {
+                if (!isPlaying || isShowingSequence || !soundsLoaded) return;
+                
+                isDragging = true;
+                startX = e.clientX || e.touches[0].clientX;
+                scratchDisk.style.cursor = 'grabbing';
+                
+                // Iniciar sonido de scratch
+                if (audioFiles.scratch && !scratchSoundPlaying) {
+                    audioFiles.scratch.currentTime = 0;
+                    audioFiles.scratch.play();
+                    scratchSoundPlaying = true;
+                }
+                
+                e.preventDefault();
+            }
+            
+            function drag(e) {
+                if (!isDragging) return;
+                
+                currentX = e.clientX || e.touches[0].clientX;
+                const deltaX = currentX - startX;
+                
+                // Limitar el movimiento a ±100px
+                const limitedX = Math.max(-100, Math.min(100, deltaX));
+                
+                // Rotar el disco según el movimiento
+                scratchDisk.querySelector('.disk-image').style.transform = `rotate(${limitedX * 2}deg)`;
+                
+                e.preventDefault();
+            }
+            
+            function endDrag() {
+                if (!isDragging) return;
+                
+                isDragging = false;
+                scratchDisk.style.cursor = 'grab';
+                
+                // Detener sonido de scratch
+                if (scratchSoundPlaying && audioFiles.scratch) {
+                    audioFiles.scratch.pause();
+                    scratchSoundPlaying = false;
+                }
+                
+                // Registrar el movimiento si estamos en modo juego
+                if (isPlaying && !isShowingSequence) {
+                    const direction = currentX - startX > 0 ? 'right' : 'left';
+                    playerSequence.push({type: 'scratch', value: direction, amount: Math.abs(currentX - startX)});
+                    updateMoves();
+                    
+                    checkSequence();
+                }
+                
+                // Volver a la posición inicial
+                setTimeout(() => {
+                    scratchDisk.querySelector('.disk-image').style.transform = 'rotate(0deg)';
+                }, 300);
+            }
+        }
+        
+        // Cargar todos los sonidos
+        function loadSounds() {
+            const soundPromises = [];
+            
+            // Cargar cada sonido
+            for (let key in audioFiles) {
+                soundPromises.push(
+                    loadSound(key)
+                );
+            }
+            
+            return Promise.all(soundPromises);
+        }
+        
+        // Cargar un sonido específico
+        function loadSound(soundName) {
+            return new Promise((resolve, reject) => {
+                const audio = new Audio();
+                
+                // Determinar el nombre del archivo según el sonido
+                let fileName;
+                if (soundName === 'pista') {
+                    fileName = 'Pista.wav';
+                } else if (soundName === 'scratch') {
+                    fileName = 'Scratch.wav';
+                } else {
+                    fileName = `Efecto ${soundName.slice(-1)}.wav`;
+                }
+                
+                audio.src = fileName;
+                audio.preload = 'auto';
+                
+                audio.addEventListener('loadeddata', () => {
+                    audioFiles[soundName] = audio;
+                    console.log(`Sonido cargado: ${fileName}`);
+                    resolve();
+                });
+                
+                audio.addEventListener('error', (e) => {
+                    console.error(`Error cargando ${fileName}:`, e);
+                    reject(e);
+                });
+                
+                // Forzar la carga
+                audio.load();
+            });
+        }
+        
+        // Reproducir sonido de botón
+        function playButtonSound(buttonNumber) {
+            const soundKey = `efecto${buttonNumber}`;
+            if (audioFiles[soundKey]) {
+                audioFiles[soundKey].currentTime = 0;
+                audioFiles[soundKey].play();
+            }
+        }
+        
+        // Iniciar el juego
+        function startGame() {
+            if (isPlaying || !soundsLoaded) return;
+            
+            // Iniciar música de fondo (solo si no está ya reproduciéndose)
+            if (audioFiles.pista && audioFiles.pista.paused) {
+                audioFiles.pista.play().catch(e => {
+                    console.log('La música se iniciará con la interacción del usuario');
+                });
+            }
+            
+            isPlaying = true;
+            currentLevel = 1;
+            score = 0;
+            sequence = [];
+            playerSequence = [];
+            
+            updateUI();
+            generateSequence();
+            showSequence();
+        }
+        
+        // Reiniciar el juego
+        function resetGame() {
+            isPlaying = false;
+            currentLevel = 1;
+            score = 0;
+            sequence = [];
+            playerSequence = [];
+            
+            updateUI();
+        }
+        
+        // Generar secuencia para el nivel actual con progresión exacta especificada
+        function generateSequence() {
+            sequence = [];
+    
+            // Mapeo exacto de nivel a movimientos según tu especificación
+            const movimientosPorNivel = {
+                1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5,
+                11: 5, 12: 5, 13: 5, 14: 6, 15: 6, 16: 6, 17: 6, 18: 7, 19: 7, 20: 8,
+                21: 8, 22: 8, 23: 9, 24: 9, 25: 10, 26: 10, 27: 11, 28: 11, 29: 11, 30: 12
+            };
+    
+            const sequenceLength = movimientosPorNivel[currentLevel] || 1;
+    
+            for (let i = 0; i < sequenceLength; i++) {
+                // 30% de probabilidad de ser un movimiento de scratch
+                if (Math.random() < 0.3) {
+                    const direction = Math.random() < 0.5 ? 'left' : 'right';
+                    sequence.push({type: 'scratch', value: direction});
+                } else {
+                    const button = Math.floor(Math.random() * 6) + 1;
+                    sequence.push({type: 'button', value: button});
+                }
+            }
+    
+            console.log(`Nivel ${currentLevel}: Secuencia de ${sequenceLength} movimientos`);
+        }
+        
+        // Mostrar la secuencia al jugador
+        function showSequence() {
+            isShowingSequence = true;
+            let i = 0;
+            
+            const interval = setInterval(() => {
+                if (i >= sequence.length) {
+                    clearInterval(interval);
+                    isShowingSequence = false;
+                    return;
+                }
+                
+                const move = sequence[i];
+                
+                if (move.type === 'button') {
+                    // Resaltar botón y reproducir sonido
+                    const button = document.querySelector(`.dj-button[data-button="${move.value}"]`);
+                    highlightButton(button);
+                    playButtonSound(move.value);
+                } else {
+                    // Mostrar movimiento de scratch
+                    showScratchMove(move.value);
+                }
+                
+                i++;
+            }, 800);
+        }
+        
+        // Resaltar botón
+        function highlightButton(button) {
+            button.classList.add('active');
+            setTimeout(() => {
+                button.classList.remove('active');
+            }, 300);
+        }
+        
+        // Mostrar movimiento de scratch
+        function showScratchMove(direction) {
+            // Mostrar el marcador de objetivo
+            targetMarker.style.display = 'block';
+            targetMarker.style.left = direction === 'right' ? '70%' : '30%';
+            
+            // Simular movimiento del disco
+            const diskImage = scratchDisk.querySelector('.disk-image');
+            diskImage.style.transition = 'transform 0.5s ease';
+            diskImage.style.transform = direction === 'right' ? 'rotate(60deg)' : 'rotate(-60deg)';
+            
+            // Reproducir sonido de scratch
+            if (audioFiles.scratch) {
+                audioFiles.scratch.currentTime = 0;
+                audioFiles.scratch.play();
+            }
+            
+            setTimeout(() => {
+                targetMarker.style.display = 'none';
+                diskImage.style.transform = 'rotate(0deg)';
+                if (audioFiles.scratch) {
+                    audioFiles.scratch.pause();
+                }
+            }, 500);
+        }
+        
+        // Comprobar la secuencia del jugador
+        function checkSequence() {
+            const currentMoveIndex = playerSequence.length - 1;
+            const currentMove = playerSequence[currentMoveIndex];
+            const expectedMove = sequence[currentMoveIndex];
+            
+            // Comprobar si el movimiento es correcto
+            let isCorrect = false;
+            
+            if (currentMove.type === 'button' && expectedMove.type === 'button') {
+                isCorrect = currentMove.value === expectedMove.value;
+            } else if (currentMove.type === 'scratch' && expectedMove.type === 'scratch') {
+                isCorrect = currentMove.value === expectedMove.value;
+            }
+            
+            if (!isCorrect) {
+                // Game over
+                showMessage('Game Over', 'Secuencia incorrecta. ¿Quieres intentarlo de nuevo?', 'Reintentar');
+                isPlaying = false;
+                return;
+            }
+            
+            // Comprobar si se completó la secuencia
+            if (playerSequence.length === sequence.length) {
+                // Nivel completado
+                score += currentLevel * 100;
+                currentLevel++;
+                
+                if (currentLevel > 30) {
+                    showMessage('¡Felicidades!', 'Has completado todos los niveles.', 'Jugar de nuevo');
+                    isPlaying = false;
+                } else {
+                    showMessage('¡Nivel Completado!', `Avanzando al nivel ${currentLevel}`, 'Continuar');
+                    playerSequence = [];
+                    generateSequence();
+                }
+                
+                updateUI();
+            }
+        }
+        
+        // Actualizar la interfaz de usuario
+        function updateUI() {
+            levelElement.textContent = currentLevel;
+            movesElement.textContent = playerSequence.length;
+            scoreElement.textContent = score;
+        }
+        
+        // Actualizar contador de movimientos
+        function updateMoves() {
+            movesElement.textContent = playerSequence.length;
+        }
+        
+        // Mostrar mensaje
+        function showMessage(title, text, buttonText) {
+            messageTitle.textContent = title;
+            messageText.textContent = text;
+            messageButton.textContent = buttonText;
+            messageElement.style.display = 'block';
+        }
+        
+        // Ocultar mensaje
+        function hideMessage() {
+            messageElement.style.display = 'none';
+            
+            if (isPlaying) {
+                showSequence();
+            } else {
+                // Si no estamos jugando, reiniciar el juego
+                resetGame();
+            }
+        }
+        
+        // Iniciar el juego cuando se carga la página
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
