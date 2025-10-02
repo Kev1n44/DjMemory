@@ -154,9 +154,11 @@
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(2, 1fr);
-            gap: clamp(12px, 3vw, 15px);
+            gap: clamp(8px, 2vw, 15px);
             flex: 1;
-            min-height: min(50vw, 250px);
+            /* NUEVO: Hacemos que los botones sean más cuadrados en móvil */
+            min-height: auto;
+            aspect-ratio: 3/2;
         }
 
         .dj-button {
@@ -172,8 +174,9 @@
             transition: all 0.2s ease;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
             user-select: none;
-            min-height: 80px;
-            padding: 10px;
+            /* NUEVO: Botones más cuadrados */
+            min-height: 0;
+            padding: 8px;
         }
 
         .dj-button:hover {
@@ -221,7 +224,6 @@
             transform: translateY(1px);
         }
 
-        /* ESTILOS ESPECÍFICOS PARA BOTONES DE CONTROL - RESTAURADOS */
         #start-btn {
             background: linear-gradient(145deg, var(--primary-color), #4361ee);
         }
@@ -293,25 +295,35 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Media Queries para diferentes tamaños de pantalla */
+        /* MEDIA QUERIES MEJORADAS PARA MÓVIL */
         @media (max-width: 768px) {
             .console-top {
                 flex-direction: column;
             }
             
             .scratch-area {
-                width: min(70vw, 280px);
-                height: min(70vw, 280px);
-                margin-bottom: 4vh;
+                width: min(60vw, 250px);
+                height: min(60vw, 250px);
+                margin-bottom: 3vh;
             }
             
             .buttons-grid {
-                min-height: min(60vw, 300px);
+                /* NUEVO: En móvil hacemos que los botones sean más anchos */
+                gap: 10px;
+                aspect-ratio: 3/2;
+                width: 100%;
+                min-height: auto;
             }
             
             .dj-button {
-                min-height: 90px;
+                /* NUEVO: Botones más anchos en móvil */
+                min-height: 0;
+                padding: 12px 8px;
                 font-size: 1.6rem;
+            }
+            
+            body {
+                padding: 1vh 3vw;
             }
         }
 
@@ -319,6 +331,7 @@
             .game-info {
                 flex-direction: column;
                 gap: 1vh;
+                margin-bottom: 3vh;
             }
             
             .info-item {
@@ -328,25 +341,49 @@
             }
             
             .buttons-grid {
-                min-height: min(70vw, 320px);
+                /* NUEVO: En móviles pequeños, aseguramos proporción cuadrada */
+                gap: 8px;
+                aspect-ratio: 3/2;
             }
             
             .dj-button {
-                min-height: 100px;
-                font-size: 1.8rem;
+                font-size: 1.4rem;
+                padding: 10px 5px;
             }
             
             .controls {
                 flex-direction: column;
                 align-items: center;
+                gap: 12px;
+                margin-top: 3vh;
             }
             
             button {
-                width: 80%;
+                width: 90%;
+                padding: 12px 20px;
+            }
+            
+            /* NUEVO: Reducimos el padding general en móviles muy pequeños */
+            .dj-console {
+                padding: 15px;
             }
         }
 
-        @media (max-height: 600px) and (orientation: landscape) {
+        /* NUEVO: Media query específica para iPhone en orientación vertical */
+        @media (max-width: 480px) and (max-height: 900px) {
+            .buttons-grid {
+                aspect-ratio: 3/2;
+                max-height: 35vh;
+            }
+            
+            .scratch-area {
+                width: min(50vw, 220px);
+                height: min(50vw, 220px);
+            }
+        }
+
+        /* NUEVO: Media query para iPhone en orientación horizontal */
+        @media (max-height: 500px) and (orientation: landscape) {
             body {
                 padding: 1vh 2vw;
             }
@@ -362,24 +399,28 @@
             .game-info {
                 margin-bottom: 1vh;
                 padding: 8px;
+                flex-direction: row;
             }
             
             .console-top {
                 margin-bottom: 1vh;
+                flex-direction: row;
             }
             
             .scratch-area {
-                width: min(30vh, 200px);
-                height: min(30vh, 200px);
+                width: min(30vh, 180px);
+                height: min(30vh, 180px);
             }
             
             .buttons-grid {
-                min-height: min(30vh, 150px);
+                aspect-ratio: 3/2;
+                max-height: 30vh;
+                gap: 8px;
             }
             
             .dj-button {
-                min-height: 40px;
-                font-size: 1rem;
+                font-size: 1.2rem;
+                padding: 5px;
             }
         }
 
@@ -392,6 +433,10 @@
             button:hover {
                 transform: none;
             }
+            
+            .dj-button:active {
+                transform: scale(0.95);
+            }
         }
     </style>
 </head>
@@ -402,7 +447,7 @@
     </div>
 
     <header>
-        <h1>DJ MEMORY</h1>
+        <h1>DJ MEMORY CHALLENGE</h1>
         <p>Repite las secuencias de la consola DJ para avanzar de nivel</p>
     </header>
 
@@ -452,9 +497,6 @@
     </div>
 
     <script>
-        // El JavaScript permanece igual que en la versión anterior
-        // Solo se han realizado cambios en el CSS para mejorar la responsividad
-        
         // Variables del juego
         let currentLevel = 1;
         let sequence = [];
@@ -463,6 +505,10 @@
         let isShowingSequence = false;
         let score = 0;
         let soundsLoaded = false;
+        
+        // NUEVO: Variables para manejo de audio en iOS
+        let audioContext;
+        let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         
         // Elementos del DOM
         const levelElement = document.getElementById('level');
@@ -493,8 +539,52 @@
             efecto6: null
         };
         
+        // NUEVO: Función para inicializar audio en iOS
+        function initAudioForIOS() {
+            if (!isIOS) return;
+            
+            try {
+                // Crear contexto de audio
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Crear un nodo de ganancia para controlar volumen
+                const gainNode = audioContext.createGain();
+                gainNode.gain.value = 0.3; // Volumen reducido para la pista
+                gainNode.connect(audioContext.destination);
+                
+                console.log('Audio inicializado para iOS');
+            } catch (e) {
+                console.error('Error inicializando audio para iOS:', e);
+            }
+        }
+        
+        // NUEVO: Función mejorada para reproducir sonidos en iOS
+        function playSoundIOS(soundName) {
+            if (!audioFiles[soundName] || !audioContext) return;
+            
+            try {
+                // Crear una fuente de audio
+                const source = audioContext.createMediaElementSource(audioFiles[soundName]);
+                source.connect(audioContext.destination);
+                
+                // Reproducir el sonido
+                audioFiles[soundName].play();
+            } catch (e) {
+                console.error('Error reproduciendo sonido en iOS:', e);
+                // Fallback al método normal
+                audioFiles[soundName].play().catch(err => {
+                    console.log('Fallback también falló:', err);
+                });
+            }
+        }
+        
         // Inicializar el juego
         function initGame() {
+            // NUEVO: Inicializar audio para iOS si es necesario
+            if (isIOS) {
+                initAudioForIOS();
+            }
+            
             // Cargar sonidos
             loadSounds().then(() => {
                 soundsLoaded = true;
@@ -505,6 +595,19 @@
                 if (audioFiles.pista) {
                     audioFiles.pista.volume = 0.2;
                     audioFiles.pista.loop = true;
+                    
+                    // NUEVO: Para iOS, intentamos reproducir la pista inmediatamente
+                    if (isIOS) {
+                        // En iOS necesitamos esperar a una interacción del usuario
+                        document.addEventListener('touchstart', function initAudioOnce() {
+                            if (audioFiles.pista && audioFiles.pista.paused) {
+                                audioFiles.pista.play().catch(e => {
+                                    console.log('iOS: La música se iniciará con el botón Iniciar');
+                                });
+                            }
+                            document.removeEventListener('touchstart', initAudioOnce);
+                        });
+                    }
                 }
             }).catch(error => {
                 console.error('Error cargando sonidos:', error);
@@ -515,6 +618,16 @@
             startButton.addEventListener('click', startGame);
             resetButton.addEventListener('click', resetGame);
             messageButton.addEventListener('click', hideMessage);
+            
+            // NUEVO: Para iOS, agregar event listeners táctiles adicionales
+            if (isIOS) {
+                document.addEventListener('touchstart', function() {
+                    // Esto ayuda a "activar" el audio en iOS
+                    if (audioContext && audioContext.state === 'suspended') {
+                        audioContext.resume();
+                    }
+                });
+            }
             
             // Event listeners para los botones DJ
             djButtons.forEach(button => {
@@ -556,7 +669,14 @@
                 // Iniciar sonido de scratch
                 if (audioFiles.scratch && !scratchSoundPlaying) {
                     audioFiles.scratch.currentTime = 0;
-                    audioFiles.scratch.play();
+                    
+                    // NUEVO: Usar método especial para iOS
+                    if (isIOS) {
+                        playSoundIOS('scratch');
+                    } else {
+                        audioFiles.scratch.play();
+                    }
+                    
                     scratchSoundPlaying = true;
                 }
                 
@@ -638,6 +758,12 @@
                 audio.src = fileName;
                 audio.preload = 'auto';
                 
+                // NUEVO: Configuraciones específicas para iOS
+                if (isIOS) {
+                    // En iOS, desactivamos el control de volumen integrado
+                    audio.volume = 1.0;
+                }
+                
                 audio.addEventListener('loadeddata', () => {
                     audioFiles[soundName] = audio;
                     console.log(`Sonido cargado: ${fileName}`);
@@ -659,13 +785,24 @@
             const soundKey = `efecto${buttonNumber}`;
             if (audioFiles[soundKey]) {
                 audioFiles[soundKey].currentTime = 0;
-                audioFiles[soundKey].play();
+                
+                // NUEVO: Usar método especial para iOS
+                if (isIOS) {
+                    playSoundIOS(soundKey);
+                } else {
+                    audioFiles[soundKey].play();
+                }
             }
         }
         
         // Iniciar el juego
         function startGame() {
             if (isPlaying || !soundsLoaded) return;
+            
+            // NUEVO: Para iOS, asegurarnos de que el contexto de audio esté activo
+            if (isIOS && audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
             
             // Iniciar música de fondo (solo si no está ya reproduciéndose)
             if (audioFiles.pista && audioFiles.pista.paused) {
