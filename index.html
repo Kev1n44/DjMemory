@@ -443,11 +443,11 @@
 <body>
     <div class="loading" id="loading">
         <div class="spinner"></div>
-        <p>Cargando sonidos...</p>
+        <p id="loading-text">Cargando sonidos...</p>
     </div>
 
     <header>
-        <h1>DJ MEMORY CHALLENGE</h1>
+        <h1>DJ MEMORY</h1>
         <p>Repite las secuencias de la consola DJ para avanzar de nivel</p>
     </header>
 
@@ -506,9 +506,13 @@
         let score = 0;
         let soundsLoaded = false;
         
-        // NUEVO: Variables para manejo de audio en iOS
+        // Sistema de audio mejorado
         let audioContext;
+        let audioBuffers = {};
+        let audioElements = {};
+        let useWebAudio = true; // Intentaremos usar Web Audio API primero
         let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        let audioInitialized = false;
         
         // Elementos del DOM
         const levelElement = document.getElementById('level');
@@ -523,110 +527,311 @@
         const messageText = document.getElementById('message-text');
         const messageButton = document.getElementById('message-button');
         const loadingElement = document.getElementById('loading');
+        const loadingText = document.getElementById('loading-text');
         
         // Botones DJ
         const djButtons = document.querySelectorAll('.dj-button');
         
-        // Objeto para almacenar los sonidos
-        const audioFiles = {
-            pista: null,
-            scratch: null,
-            efecto1: null,
-            efecto2: null,
-            efecto3: null,
-            efecto4: null,
-            efecto5: null,
-            efecto6: null
-        };
+        // Lista de archivos de audio
+        const audioFiles = [
+            { name: 'pista', file: 'Pista.wav', loop: true, volume: 0.2 },
+            { name: 'scratch', file: 'Scratch.wav', loop: false, volume: 1.0 },
+            { name: 'efecto1', file: 'Efecto 1.wav', loop: false, volume: 1.0 },
+            { name: 'efecto2', file: 'Efecto 2.wav', loop: false, volume: 1.0 },
+            { name: 'efecto3', file: 'Efecto 3.wav', loop: false, volume: 1.0 },
+            { name: 'efecto4', file: 'Efecto 4.wav', loop: false, volume: 1.0 },
+            { name: 'efecto5', file: 'Efecto 5.wav', loop: false, volume: 1.0 },
+            { name: 'efecto6', file: 'Efecto 6.wav', loop: false, volume: 1.0 }
+        ];
         
-        // NUEVO: Función para inicializar audio en iOS
-        function initAudioForIOS() {
-            if (!isIOS) return;
+        // Inicialización mejorada del audio
+        function initAudioSystem() {
+            if (audioInitialized) return;
             
             try {
-                // Crear contexto de audio
+                // Crear el contexto de audio
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('AudioContext creado correctamente');
+                audioInitialized = true;
                 
-                // Crear un nodo de ganancia para controlar volumen
-                const gainNode = audioContext.createGain();
-                gainNode.gain.value = 0.3; // Volumen reducido para la pista
-                gainNode.connect(audioContext.destination);
-                
-                console.log('Audio inicializado para iOS');
-            } catch (e) {
-                console.error('Error inicializando audio para iOS:', e);
+                // Para iOS, necesitamos esperar a una interacción del usuario para activar el audio
+                if (isIOS) {
+                    const activateAudio = () => {
+                        if (audioContext.state === 'suspended') {
+                            audioContext.resume().then(() => {
+                                console.log('AudioContext activado en iOS');
+                                // Remover los event listeners después de la activación
+                                document.removeEventListener('touchstart', activateAudio);
+                                document.removeEventListener('click', activateAudio);
+                            });
+                        }
+                    };
+                    
+                    document.addEventListener('touchstart', activateAudio, { once: true });
+                    document.addEventListener('click', activateAudio, { once: true });
+                }
+            } catch (error) {
+                console.error('Error inicializando AudioContext:', error);
+                useWebAudio = false;
             }
         }
         
-        // NUEVO: Función mejorada para reproducir sonidos en iOS
-        function playSoundIOS(soundName) {
-            if (!audioFiles[soundName] || !audioContext) return;
+        // Cargar sonidos con sistema de fallback
+        function loadSounds() {
+            loadingText.textContent = 'Cargando sonidos...';
+            
+            if (useWebAudio) {
+                return loadAudioBuffers().catch(error => {
+                    console.error('Fallando a elementos de audio tradicionales:', error);
+                    useWebAudio = false;
+                    return loadAudioElements();
+                });
+            } else {
+                return loadAudioElements();
+            }
+        }
+        
+        // Cargar sonidos como buffers de audio (Web Audio API)
+        function loadAudioBuffers() {
+            return Promise.all(
+                audioFiles.map(audioFile => 
+                    loadAudioBuffer(audioFile.name, audioFile.file)
+                )
+            );
+        }
+        
+        // Cargar un buffer de audio individual
+        function loadAudioBuffer(name, filename) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', filename, true);
+                xhr.responseType = 'arraybuffer';
+                
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        if (!audioContext) {
+                            initAudioSystem();
+                        }
+                        
+                        audioContext.decodeAudioData(xhr.response, 
+                            buffer => {
+                                audioBuffers[name] = buffer;
+                                console.log(`Buffer cargado: ${filename}`);
+                                updateLoadingProgress();
+                                resolve();
+                            },
+                            error => {
+                                console.error(`Error decodificando ${filename}:`, error);
+                                reject(error);
+                            }
+                        );
+                    } else {
+                        console.error(`Error HTTP ${xhr.status} cargando ${filename}`);
+                        reject(new Error(`HTTP error: ${xhr.status}`));
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    console.error(`Error de red cargando ${filename}`);
+                    reject(new Error('Network error'));
+                };
+                
+                xhr.send();
+            });
+        }
+        
+        // Cargar sonidos como elementos de audio tradicionales (fallback)
+        function loadAudioElements() {
+            return Promise.all(
+                audioFiles.map(audioFile => 
+                    loadAudioElement(audioFile.name, audioFile.file, audioFile.loop, audioFile.volume)
+                )
+            );
+        }
+        
+        // Cargar un elemento de audio individual
+        function loadAudioElement(name, filename, loop = false, volume = 1.0) {
+            return new Promise((resolve, reject) => {
+                const audio = new Audio();
+                
+                audio.src = filename;
+                audio.preload = 'auto';
+                
+                if (loop) {
+                    audio.loop = true;
+                }
+                
+                audio.volume = volume;
+                
+                const onLoaded = () => {
+                    audio.removeEventListener('canplaythrough', onLoaded);
+                    audio.removeEventListener('error', onError);
+                    audioElements[name] = audio;
+                    console.log(`Elemento de audio cargado: ${filename}`);
+                    updateLoadingProgress();
+                    resolve();
+                };
+                
+                const onError = (error) => {
+                    audio.removeEventListener('canplaythrough', onLoaded);
+                    audio.removeEventListener('error', onError);
+                    console.error(`Error cargando ${filename}:`, error);
+                    reject(error);
+                };
+                
+                audio.addEventListener('canplaythrough', onLoaded);
+                audio.addEventListener('error', onError);
+                
+                // Forzar la carga
+                audio.load();
+            });
+        }
+        
+        // Actualizar progreso de carga
+        let loadedSounds = 0;
+        function updateLoadingProgress() {
+            loadedSounds++;
+            const progress = Math.round((loadedSounds / audioFiles.length) * 100);
+            loadingText.textContent = `Cargando sonidos... ${progress}%`;
+        }
+        
+        // Reproducir sonido (usa Web Audio API o fallback a elementos de audio)
+        function playSound(soundName, options = {}) {
+            if (useWebAudio && audioBuffers[soundName]) {
+                return playSoundFromBuffer(soundName, options);
+            } else if (audioElements[soundName]) {
+                return playSoundFromElement(soundName, options);
+            } else {
+                console.warn(`Sonido no disponible: ${soundName}`);
+                return null;
+            }
+        }
+        
+        // Reproducir sonido desde buffer (Web Audio API)
+        function playSoundFromBuffer(soundName, options = {}) {
+            if (!audioContext || !audioBuffers[soundName]) return null;
             
             try {
-                // Crear una fuente de audio
-                const source = audioContext.createMediaElementSource(audioFiles[soundName]);
-                source.connect(audioContext.destination);
+                // Asegurarse de que el contexto esté activo (especialmente en iOS)
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
                 
-                // Reproducir el sonido
-                audioFiles[soundName].play();
-            } catch (e) {
-                console.error('Error reproduciendo sonido en iOS:', e);
-                // Fallback al método normal
-                audioFiles[soundName].play().catch(err => {
-                    console.log('Fallback también falló:', err);
-                });
+                const source = audioContext.createBufferSource();
+                const gainNode = audioContext.createGain();
+                
+                source.buffer = audioBuffers[soundName];
+                
+                // Configurar opciones
+                if (options.loop) {
+                    source.loop = true;
+                }
+                
+                // Configurar volumen
+                const volume = options.volume !== undefined ? options.volume : 1.0;
+                gainNode.gain.value = volume;
+                
+                // Conectar y reproducir
+                source.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                source.start(0);
+                
+                return source;
+            } catch (error) {
+                console.error(`Error reproduciendo ${soundName}:`, error);
+                return null;
+            }
+        }
+        
+        // Reproducir sonido desde elemento de audio (fallback)
+        function playSoundFromElement(soundName, options = {}) {
+            if (!audioElements[soundName]) return null;
+            
+            try {
+                const audio = audioElements[soundName];
+                audio.currentTime = 0;
+                
+                // Configurar volumen
+                const volume = options.volume !== undefined ? options.volume : 1.0;
+                audio.volume = volume;
+                
+                // Reproducir
+                const playPromise = audio.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.error(`Error reproduciendo ${soundName}:`, error);
+                    });
+                }
+                
+                return audio;
+            } catch (error) {
+                console.error(`Error reproduciendo ${soundName}:`, error);
+                return null;
+            }
+        }
+        
+        // Detener todos los sonidos
+        function stopAllSounds() {
+            // Detener pista de fondo si está en Web Audio API
+            if (window.pistaSource) {
+                window.pistaSource.stop();
+                window.pistaSource = null;
+            }
+            
+            // Detener pista de fondo si está en elementos de audio
+            if (audioElements.pista) {
+                audioElements.pista.pause();
+                audioElements.pista.currentTime = 0;
+            }
+            
+            // Detener sonido de scratch si está reproduciéndose
+            if (window.scratchSoundSource) {
+                if (useWebAudio) {
+                    window.scratchSoundSource.stop();
+                } else {
+                    window.scratchSoundSource.pause();
+                    window.scratchSoundSource.currentTime = 0;
+                }
+                window.scratchSoundSource = null;
             }
         }
         
         // Inicializar el juego
         function initGame() {
-            // NUEVO: Inicializar audio para iOS si es necesario
-            if (isIOS) {
-                initAudioForIOS();
-            }
+            // Inicializar sistema de audio
+            initAudioSystem();
             
             // Cargar sonidos
             loadSounds().then(() => {
                 soundsLoaded = true;
                 loadingElement.style.display = 'none';
                 console.log('Todos los sonidos cargados correctamente');
-                
-                // Iniciar música de fondo
-                if (audioFiles.pista) {
-                    audioFiles.pista.volume = 0.2;
-                    audioFiles.pista.loop = true;
-                    
-                    // NUEVO: Para iOS, intentamos reproducir la pista inmediatamente
-                    if (isIOS) {
-                        // En iOS necesitamos esperar a una interacción del usuario
-                        document.addEventListener('touchstart', function initAudioOnce() {
-                            if (audioFiles.pista && audioFiles.pista.paused) {
-                                audioFiles.pista.play().catch(e => {
-                                    console.log('iOS: La música se iniciará con el botón Iniciar');
-                                });
-                            }
-                            document.removeEventListener('touchstart', initAudioOnce);
-                        });
-                    }
-                }
+                console.log('Usando:', useWebAudio ? 'Web Audio API' : 'Elementos de audio tradicionales');
             }).catch(error => {
                 console.error('Error cargando sonidos:', error);
-                loadingElement.innerHTML = '<p>Error cargando sonidos. Recarga la página.</p>';
+                loadingText.textContent = 'Error cargando sonidos. El juego funcionará sin audio.';
+                setTimeout(() => {
+                    loadingElement.style.display = 'none';
+                    soundsLoaded = true; // Permitir que el juego continúe sin sonido
+                }, 3000);
             });
             
-            // Event listeners
+            // Event listeners para botones de control
             startButton.addEventListener('click', startGame);
             resetButton.addEventListener('click', resetGame);
             messageButton.addEventListener('click', hideMessage);
             
-            // NUEVO: Para iOS, agregar event listeners táctiles adicionales
+            // Para iOS, activar audio en cualquier interacción
             if (isIOS) {
-                document.addEventListener('touchstart', function() {
-                    // Esto ayuda a "activar" el audio en iOS
+                const activateOnInteraction = () => {
                     if (audioContext && audioContext.state === 'suspended') {
                         audioContext.resume();
                     }
-                });
+                };
+                
+                document.addEventListener('touchstart', activateOnInteraction);
+                document.addEventListener('click', activateOnInteraction);
             }
             
             // Event listeners para los botones DJ
@@ -648,7 +853,7 @@
             let isDragging = false;
             let startX = 0;
             let currentX = 0;
-            let scratchSoundPlaying = false;
+            window.scratchSoundSource = null;
             
             scratchDisk.addEventListener('mousedown', startDrag);
             scratchDisk.addEventListener('touchstart', startDrag);
@@ -667,17 +872,8 @@
                 scratchDisk.style.cursor = 'grabbing';
                 
                 // Iniciar sonido de scratch
-                if (audioFiles.scratch && !scratchSoundPlaying) {
-                    audioFiles.scratch.currentTime = 0;
-                    
-                    // NUEVO: Usar método especial para iOS
-                    if (isIOS) {
-                        playSoundIOS('scratch');
-                    } else {
-                        audioFiles.scratch.play();
-                    }
-                    
-                    scratchSoundPlaying = true;
+                if (!window.scratchSoundSource) {
+                    window.scratchSoundSource = playSound('scratch', { loop: true });
                 }
                 
                 e.preventDefault();
@@ -705,9 +901,14 @@
                 scratchDisk.style.cursor = 'grab';
                 
                 // Detener sonido de scratch
-                if (scratchSoundPlaying && audioFiles.scratch) {
-                    audioFiles.scratch.pause();
-                    scratchSoundPlaying = false;
+                if (window.scratchSoundSource) {
+                    if (useWebAudio) {
+                        window.scratchSoundSource.stop();
+                    } else {
+                        window.scratchSoundSource.pause();
+                        window.scratchSoundSource.currentTime = 0;
+                    }
+                    window.scratchSoundSource = null;
                 }
                 
                 // Registrar el movimiento si estamos en modo juego
@@ -726,87 +927,29 @@
             }
         }
         
-        // Cargar todos los sonidos
-        function loadSounds() {
-            const soundPromises = [];
-            
-            // Cargar cada sonido
-            for (let key in audioFiles) {
-                soundPromises.push(
-                    loadSound(key)
-                );
-            }
-            
-            return Promise.all(soundPromises);
-        }
-        
-        // Cargar un sonido específico
-        function loadSound(soundName) {
-            return new Promise((resolve, reject) => {
-                const audio = new Audio();
-                
-                // Determinar el nombre del archivo según el sonido
-                let fileName;
-                if (soundName === 'pista') {
-                    fileName = 'Pista.wav';
-                } else if (soundName === 'scratch') {
-                    fileName = 'Scratch.wav';
-                } else {
-                    fileName = `Efecto ${soundName.slice(-1)}.wav`;
-                }
-                
-                audio.src = fileName;
-                audio.preload = 'auto';
-                
-                // NUEVO: Configuraciones específicas para iOS
-                if (isIOS) {
-                    // En iOS, desactivamos el control de volumen integrado
-                    audio.volume = 1.0;
-                }
-                
-                audio.addEventListener('loadeddata', () => {
-                    audioFiles[soundName] = audio;
-                    console.log(`Sonido cargado: ${fileName}`);
-                    resolve();
-                });
-                
-                audio.addEventListener('error', (e) => {
-                    console.error(`Error cargando ${fileName}:`, e);
-                    reject(e);
-                });
-                
-                // Forzar la carga
-                audio.load();
-            });
-        }
-        
         // Reproducir sonido de botón
         function playButtonSound(buttonNumber) {
-            const soundKey = `efecto${buttonNumber}`;
-            if (audioFiles[soundKey]) {
-                audioFiles[soundKey].currentTime = 0;
-                
-                // NUEVO: Usar método especial para iOS
-                if (isIOS) {
-                    playSoundIOS(soundKey);
-                } else {
-                    audioFiles[soundKey].play();
-                }
-            }
+            const soundName = `efecto${buttonNumber}`;
+            playSound(soundName);
         }
         
         // Iniciar el juego
         function startGame() {
             if (isPlaying || !soundsLoaded) return;
             
-            // NUEVO: Para iOS, asegurarnos de que el contexto de audio esté activo
-            if (isIOS && audioContext && audioContext.state === 'suspended') {
+            // Asegurar que el audio esté activo
+            if (audioContext && audioContext.state === 'suspended') {
                 audioContext.resume();
             }
             
-            // Iniciar música de fondo (solo si no está ya reproduciéndose)
-            if (audioFiles.pista && audioFiles.pista.paused) {
-                audioFiles.pista.play().catch(e => {
+            // Iniciar música de fondo
+            if (useWebAudio) {
+                window.pistaSource = playSound('pista', { 
+                    loop: true, 
+                    volume: 0.2 
+                });
+            } else if (audioElements.pista) {
+                audioElements.pista.play().catch(e => {
                     console.log('La música se iniciará con la interacción del usuario');
                 });
             }
@@ -830,22 +973,28 @@
             sequence = [];
             playerSequence = [];
             
+            // Detener todos los sonidos
+            stopAllSounds();
+            
             updateUI();
         }
+        
+        // El resto de las funciones del juego permanecen igual...
+        // ... (generateSequence, showSequence, checkSequence, etc.)
         
         // Generar secuencia para el nivel actual con progresión exacta especificada
         function generateSequence() {
             sequence = [];
-    
+            
             // Mapeo exacto de nivel a movimientos según tu especificación
             const movimientosPorNivel = {
                 1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5,
                 11: 5, 12: 5, 13: 5, 14: 6, 15: 6, 16: 6, 17: 6, 18: 7, 19: 7, 20: 8,
                 21: 8, 22: 8, 23: 9, 24: 9, 25: 10, 26: 10, 27: 11, 28: 11, 29: 11, 30: 12
             };
-    
+            
             const sequenceLength = movimientosPorNivel[currentLevel] || 1;
-    
+            
             for (let i = 0; i < sequenceLength; i++) {
                 // 30% de probabilidad de ser un movimiento de scratch
                 if (Math.random() < 0.3) {
@@ -856,7 +1005,7 @@
                     sequence.push({type: 'button', value: button});
                 }
             }
-    
+            
             console.log(`Nivel ${currentLevel}: Secuencia de ${sequenceLength} movimientos`);
         }
         
@@ -908,16 +1057,18 @@
             diskImage.style.transform = direction === 'right' ? 'rotate(60deg)' : 'rotate(-60deg)';
             
             // Reproducir sonido de scratch
-            if (audioFiles.scratch) {
-                audioFiles.scratch.currentTime = 0;
-                audioFiles.scratch.play();
-            }
+            const scratchSource = playSound('scratch');
             
             setTimeout(() => {
                 targetMarker.style.display = 'none';
                 diskImage.style.transform = 'rotate(0deg)';
-                if (audioFiles.scratch) {
-                    audioFiles.scratch.pause();
+                if (scratchSource) {
+                    if (useWebAudio) {
+                        scratchSource.stop();
+                    } else {
+                        scratchSource.pause();
+                        scratchSource.currentTime = 0;
+                    }
                 }
             }, 500);
         }
@@ -941,6 +1092,7 @@
                 // Game over
                 showMessage('Game Over', 'Secuencia incorrecta. ¿Quieres intentarlo de nuevo?', 'Reintentar');
                 isPlaying = false;
+                stopAllSounds();
                 return;
             }
             
@@ -953,6 +1105,7 @@
                 if (currentLevel > 30) {
                     showMessage('¡Felicidades!', 'Has completado todos los niveles.', 'Jugar de nuevo');
                     isPlaying = false;
+                    stopAllSounds();
                 } else {
                     showMessage('¡Nivel Completado!', `Avanzando al nivel ${currentLevel}`, 'Continuar');
                     playerSequence = [];
